@@ -1,0 +1,48 @@
+HISHAM'S PDF EDITOR — how to open it
+=====================================
+
+It's free, works offline, and your PDFs never leave your computer.
+
+WINDOWS
+-------
+Pick one:
+  • Hishams-PDF-Editor-Setup-1.0.0.exe     → installs it (Start menu + desktop icon)
+  • Hishams-PDF-Editor-Portable-1.0.0.exe  → no install, just double-click
+
+The first time, Windows may show a blue box: "Windows protected your PC".
+That's because the app isn't from a big company with a paid certificate.
+  1. Click "More info"
+  2. Click "Run anyway"
+You only need to do this once.
+
+To open PDFs with it by default: in the app, open Tools → "Set as default PDF app…".
+
+MAC (or any other computer)
+---------------------------
+Open Hishams-PDF-Editor.html in Chrome, Edge or Firefox.
+Save button = downloads the edited PDF.
+
+
+محرر PDF من هشام — طريقة الفتح
+================================
+
+مجاني ويعمل بدون إنترنت، وملفاتك لا تغادر جهازك أبداً.
+
+ويندوز
+------
+اختر واحداً:
+  • Hishams-PDF-Editor-Setup-1.0.0.exe     ← يثبّت البرنامج (قائمة ابدأ + أيقونة على سطح المكتب)
+  • Hishams-PDF-Editor-Portable-1.0.0.exe  ← بدون تثبيت، انقر مرتين فقط
+
+في المرة الأولى قد يظهر مربع أزرق: "Windows protected your PC".
+هذا لأن البرنامج ليس من شركة كبيرة لديها شهادة مدفوعة.
+  1. اضغط "More info"
+  2. اضغط "Run anyway"
+تحتاج لذلك مرة واحدة فقط.
+
+لتغيير اللغة إلى العربية: اضغط زر "العربية" أعلى البرنامج.
+
+ماك (أو أي جهاز آخر)
+--------------------
+افتح الملف Hishams-PDF-Editor.html في Chrome أو Edge أو Firefox.
+زر الحفظ يقوم بتنزيل ملف PDF المعدّل.

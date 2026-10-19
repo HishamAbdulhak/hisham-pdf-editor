@@ -1,0 +1,18 @@
+const T = window.pdfTools;
+const data = await window.pdfeTest.read('test/sample.pdf');
+const tab = await app.openFile({ path: null, name: 'sample.pdf', data });
+const e = tab.editor;
+await sleep(800);
+const v = e.views[0];
+await e.showView(v);
+app.shared.props.font = 'Naskh';
+v.canvas.add(e.makeTextbox('مرحبا بالعالم، هذا اختبار للتعرف على النص العربي', { left: 72, top: 700, width: 470, fontSize: 20, textAlign: 'right', direction: 'rtl' }));
+e.commit(v);
+await sleep(1500);
+const imgs = await T.pagesToImages(e, [0], { format: 'png', dpi: 150 });
+const dataUrl = await new Promise(async (r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(new Blob([imgs[0].data], { type: 'image/png' })); });
+const scan = await app.openFile({ path: null, name: 'scan-ar.pdf', data: await T.imagesToPdf([{ dataUrl }], { size: 'A4', margin: 0 }) });
+await sleep(500);
+await T.ocrPages(scan.editor, [0], ['eng', 'ara']);
+const text = (await scan.editor.views[0].pdfPage.getTextContent()).items.map((i) => i.str).join(' ');
+return { arabicFound: /مرحبا|العالم|اختبار|العربي/.test(text), tail: text.slice(-160) };
