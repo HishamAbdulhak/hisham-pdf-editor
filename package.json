@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Free, offline PDF editor: edit text, fill forms, sign, OCR, and organise pages.",
   "scripts": {
+    "setup": "node scripts/setup.js",
     "build": "node scripts/build.js",
     "dev": "node scripts/build.js && node scripts/serve.js",
     "watch": "node scripts/build.js --watch",
@@ -13,7 +14,10 @@
     "dist": "node scripts/make-icon.js && node scripts/build.js && electron-builder --win",
     "html": "node scripts/build.js && node scripts/build-html.js",
     "dist:temp": "node scripts/release.js",
-    "test": "node test/prune.test.mjs && sh test/run.sh test/t1-core.js && sh test/run.sh test/t2-tools.js"
+    "test": "npm run lint && npm run test:unit && npm run test:ui",
+    "lint": "eslint .",
+    "test:unit": "node test/prune.test.mjs && node test/fontscan.test.mjs",
+    "test:ui": "sh test/run.sh test/t1-core.js && sh test/run.sh test/t2-tools.js && sh test/run.sh test/t3-ui.js && sh test/run.sh test/t4-speed.js && sh test/run.sh test/t5-startup.js && sh test/run.sh test/t6a-session.js && sh -c \"KEEP=1 sh test/run.sh test/t6b-session.js\" && sh test/run.sh test/t7-dialogs.js && sh test/run.sh test/t8-input.js && sh test/run.sh test/t9-fixes.js && sh test/run.sh test/t10-fonts.js"
   },
   "author": "Hisham",
   "license": "MIT",
@@ -30,8 +34,10 @@
     "electron": "^44.9.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
     "fabric": "^7.4.0",
     "fflate": "^0.8.3",
+    "globals": "^17.14.0",
     "pdfjs-dist": "^6.4.299",
     "tesseract.js": "^7.0.0",
     "tesseract.js-core": "^7.0.0"

@@ -34,3 +34,9 @@ async function rawContains(bytes, needle) {
   }
   return false;
 }
+// Checks: expect() records a failure, done() throws if any were recorded (so run.sh exits 1).
+function expect(out, ok, what) { if (!ok) (out.failed ||= []).push(what); }
+function done(out) {
+  if (out.failed?.length) throw new Error(`failed: ${out.failed.join('; ')} | ${JSON.stringify(out)}`);
+  return out;
+}

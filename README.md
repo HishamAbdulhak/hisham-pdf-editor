@@ -50,12 +50,14 @@ password protection (open and edit locked PDFs, lock saved files), and
 
 ```
 npm install
+npm run setup      # once: Electron + esbuild binaries, app icon
 npm run dev        # browser version at http://localhost:5178
 npm start          # desktop app
 npm run build      # build out/ (shared by everything)
 npm run html       # dist/Hishams-PDF-Editor.html
 npm run dist       # Windows installer + portable exe
-sh test/run.sh test/t1-core.js   # automated UI test inside the real app
+npm test           # lint, unit tests and UI tests inside the real app (fails on any broken check)
+sh test/run.sh test/t1-core.js   # one UI test
 ```
 
 On this machine the Windows build has to write to a short temp path (see
