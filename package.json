@@ -1,7 +1,7 @@
 {
   "name": "hisham-pdf-editor",
   "productName": "Hisham's PDF Editor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Free, offline PDF editor: edit text, fill forms, sign, OCR, and organise pages.",
   "scripts": {
     "setup": "node scripts/setup.js",
