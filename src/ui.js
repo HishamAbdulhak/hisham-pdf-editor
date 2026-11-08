@@ -261,3 +261,80 @@ export function dropdown(anchor, items) {
   setTimeout(() => document.addEventListener('mousedown', off, true), 0);
   menu.querySelector('button:not(:disabled)')?.focus();
 }
+
+// Toast with buttons that stays until answered (or times out -> null). buttons: [{ label, value, primary }]
+export function askToast(message, buttons, ms = 30000) {
+  return new Promise((resolve) => {
+    const host = document.getElementById('toasts');
+    const el = document.createElement('div');
+    el.className = 'toast ask';
+    el.setAttribute('role', 'alertdialog');
+    el.appendChild(Object.assign(document.createElement('div'), { textContent: message }));
+    const row = Object.assign(document.createElement('div'), { className: 'toast-actions' });
+    let done = false;
+    const finish = (v) => {
+      if (done) return;
+      done = true;
+      el.classList.add('out');
+      setTimeout(() => el.remove(), 300);
+      resolve(v);
+    };
+    for (const b of buttons) {
+      const btn = Object.assign(document.createElement('button'), { textContent: b.label, className: b.primary ? 'primary' : '' });
+      btn.onclick = () => finish(b.value);
+      row.appendChild(btn);
+    }
+    el.appendChild(row);
+    host.appendChild(el);
+    setTimeout(() => finish(null), ms);
+  });
+}
+
+// Searchable list popup (used by the font picker). items: [{ label, value, font, group }]
+export function searchList(anchor, { items, current, onPick, placeholder = '' }) {
+  document.querySelector('.dropdown')?.remove();
+  const menu = document.createElement('div');
+  menu.className = 'dropdown search-list';
+  const input = Object.assign(document.createElement('input'), { type: 'search', placeholder, className: 'search-list-input' });
+  const list = Object.assign(document.createElement('div'), { className: 'search-list-items' });
+  list.setAttribute('role', 'listbox');
+  menu.append(input, list);
+  const close = () => { menu.remove(); document.removeEventListener('mousedown', off, true); };
+  const render = () => {
+    const q = input.value.trim().toLowerCase();
+    list.innerHTML = '';
+    let group = null;
+    let shown = 0;
+    for (const it of items) {
+      if (q && !it.label.toLowerCase().includes(q)) continue;
+      if (it.group && it.group !== group && !q) {
+        group = it.group;
+        list.appendChild(Object.assign(document.createElement('div'), { className: 'search-list-group', textContent: group }));
+      }
+      const b = document.createElement('button');
+      b.setAttribute('role', 'option');
+      b.textContent = it.label;
+      if (it.font) b.style.fontFamily = it.font;
+      if (it.value === current) { b.classList.add('on'); b.setAttribute('aria-selected', 'true'); }
+      b.onclick = () => { close(); onPick(it.value); };
+      list.appendChild(b);
+      if (++shown >= 400) break;
+    }
+  };
+  input.oninput = render;
+  input.onkeydown = (e) => {
+    if (e.key === 'Escape') close();
+    if (e.key === 'Enter') list.querySelector('button')?.click();
+    if (e.key === 'ArrowDown') { e.preventDefault(); list.querySelector('button')?.focus(); }
+  };
+  render();
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  const rtl = document.documentElement.dir === 'rtl';
+  menu.style.left = `${rtl ? Math.max(8, r.right - menu.offsetWidth) : Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)}px`;
+  menu.style.top = `${r.bottom + 4}px`;
+  const off = (e) => { if (!menu.contains(e.target) && e.target !== anchor) close(); };
+  setTimeout(() => document.addEventListener('mousedown', off, true), 0);
+  input.focus();
+  list.querySelector('.on')?.scrollIntoView({ block: 'center' });
+}

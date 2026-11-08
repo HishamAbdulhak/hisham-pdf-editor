@@ -5,9 +5,11 @@ import { newId, loadPdfjs } from './editor.js';
 import { exportPdf } from './exporter.js';
 import { chooseSignature } from './signature.js';
 import { platform, fileToDataUrl } from './platform.js';
-import { icons, toast, busy, progress, confirmBox, dropdown, modal } from './ui.js';
+import { icons, toast, busy, progress, confirmBox, dropdown, modal, searchList } from './ui.js';
 import { t, setLang, getLang, onLangChange } from './i18n.js';
-import { FAMILIES, loadDisplayFonts } from './fonts.js';
+import { FAMILIES, FONTS, fontCss, loadDisplayFonts } from './fonts.js';
+import * as fontlib from './fontlib.js';
+import { isNamed, familyOf, namedId, familyNames, systemFonts, prepareDisplay, genericFor, lookalikeFor } from './fontlib.js';
 import { assetUrl } from './assets.js';
 import { Search } from './search.js';
 import { printDoc } from './print.js';
@@ -188,6 +190,43 @@ const SWATCHES = ['#1f2937', '#ffffff', '#d92d20', '#f79009', '#12b76a', '#2f6fe
 const HL_SWATCHES = ['#ffe066', '#a6f4c5', '#9fd4ff', '#ffb3d9', '#ffc58f'];
 const FONT_LABELS = { Helvetica: 'Sans (Helvetica)', Times: 'Serif (Times)', Courier: 'Mono (Courier)', Naskh: 'Arabic Naskh', ArSans: 'Arabic Sans' };
 
+async function pickFont(value) {
+  if (isNamed(value)) {
+    await prepareDisplay(familyOf(value)).catch(() => {});
+    shared.props.generic = genericFor(familyOf(value));
+  } else shared.props.generic = undefined;
+  setProp('font', value);
+}
+
+// Label for the current font; says when a look-alike or the PDF's own copy stands in for it.
+function fontLabel(font) {
+  if (!isNamed(font)) return t(FONT_LABELS[font] || font);
+  const fam = familyOf(font);
+  loadInstalledFamilies();
+  if (installedFamilies && !installedFamilies.has(fam.toLowerCase())) {
+    const alt = lookalikeFor(fam);
+    return alt ? t('{f} (look-alike: {a})', { f: fam, a: alt }) : t('{f} (from PDF)', { f: fam });
+  }
+  return fam;
+}
+let installedFamilies = null;
+let installedLoading = false;
+function loadInstalledFamilies() {
+  if (installedFamilies || installedLoading) return;
+  installedLoading = true;
+  systemFonts().then((list) => { installedFamilies = new Set(list.map((f) => f.family.toLowerCase())); renderPropbar(); });
+}
+
+async function openFontPicker(anchor) {
+  const p = shared.props;
+  const items = FAMILIES.map((f) => ({ label: t(FONT_LABELS[f]), value: f, font: FONTS[f], group: t('Standard') }));
+  if (isNamed(p.font)) items.unshift({ label: fontLabel(p.font), value: p.font, font: fontCss({ font: p.font, generic: p.generic }), group: t('Current') });
+  for (const fam of await familyNames()) {
+    if (namedId(fam) !== p.font) items.push({ label: fam, value: namedId(fam), font: `"${fam.replace(/"/g, '')}", ${FONTS.Helvetica}`, group: t('Fonts on this computer') });
+  }
+  searchList(anchor, { items, current: p.font, onPick: (v) => pickFont(v), placeholder: t('Search fonts…') });
+}
+
 function setProp(name, value) {
   shared.props[name] = value;
   ed()?.applyPropToSelection(name, value);
@@ -277,15 +316,12 @@ function renderPropbar() {
   if (has('pen', 'line', 'arrow', 'rect', 'ellipse')) range(section(t('Thickness')), 0.5, 20, 0.5, p.width, (v) => setProp('width', v));
   if (has('text')) {
     const s = section(t('Font'));
-    const sel = document.createElement('select');
-    for (const f of FAMILIES) {
-      const o = document.createElement('option');
-      o.value = f;
-      o.textContent = t(FONT_LABELS[f]);
-      o.selected = p.font === f;
-      sel.appendChild(o);
-    }
-    sel.onchange = () => setProp('font', sel.value);
+    const sel = document.createElement('button');
+    sel.className = 'font-btn';
+    sel.textContent = fontLabel(p.font);
+    sel.title = t('Font');
+    sel.style.fontFamily = fontCss({ font: p.font, generic: p.generic });
+    sel.onclick = () => openFontPicker(sel);
     const size = document.createElement('input');
     Object.assign(size, { type: 'number', min: 4, max: 200, step: 0.5, value: p.size, className: 'num', title: t('Font size') });
     size.onchange = () => { if (+size.value > 0) setProp('size', +size.value); };
@@ -1281,7 +1317,7 @@ function refreshTextAfterFonts() {
 
 Object.assign(window.pdfApp, { openFile, exportPdf, setTool, saveTab });
 // Test hooks (used by the automated UI tests).
-window.pdfTools = { addPageNumbers, addWatermark, splitGroups, splitPdf, pagesToImages, imagesToPdf, compressImages, ocrPages, pagesNeedingOcr, applyRedactions, loadPdfjs, fabric, recognizeCanvas, renderForOcr };
+window.pdfTools = { addPageNumbers, addWatermark, splitGroups, splitPdf, pagesToImages, imagesToPdf, compressImages, ocrPages, pagesNeedingOcr, applyRedactions, loadPdfjs, fabric, recognizeCanvas, renderForOcr, fontlib };
 
 (async function start() {
   settings = (await platform.storeGet('settings', {})) || {};

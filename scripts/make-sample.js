@@ -33,6 +33,12 @@ const { png } = require('./png');
   const p2 = doc.addPage([612, 792]);
   p2.drawText('Page two (rotated 90 degrees)', { x: 72, y: 700, size: 20, font: bold });
   p2.setRotation(degrees(90));
-  fs.writeFileSync(path.join(__dirname, '..', 'test', 'sample.pdf'), await doc.save());
+  // test/sample.pdf is a committed fixture the tests depend on: only replace it on purpose.
+  const target = path.join(__dirname, '..', 'test', 'sample.pdf');
+  if (fs.existsSync(target) && !process.argv.includes('--force')) {
+    console.log('test/sample.pdf already exists (committed test fixture). Use --force to regenerate it.');
+    return;
+  }
+  fs.writeFileSync(target, await doc.save());
   console.log('wrote test/sample.pdf');
 })();

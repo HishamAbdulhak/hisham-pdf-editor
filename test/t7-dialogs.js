@@ -48,4 +48,6 @@ await sleep(150);
 [...document.querySelectorAll('.dropdown button')][6].click(); // Split
 await sleep(500);
 await window.pdfeTest.shot('t7-arabic-dialog');
-return out;
+expect(out, out.opened.length === 10 && out.opened.every((s) => !/undefined|error/i.test(s)), 'every menu dialog opens');
+expect(out, out.signatureDialog === 'Add signature' && out.objects.includes('sig'), 'signature added');
+return done(out);

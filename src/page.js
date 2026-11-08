@@ -257,6 +257,7 @@ export class PageView {
     if (!this.canvas) return;
     const token = ++this.loadToken;
     const objects = json && json.length ? await fabric.util.enlivenObjects(json) : [];
+    if (objects.length) await this.editor.prepareFonts(objects);
     if (!this.canvas || token !== this.loadToken) return;
     this.canvas.discardActiveObject();
     this.canvas.remove(...this.canvas.getObjects());
@@ -537,6 +538,8 @@ function guessFont(style, fontName, pdfPage, rtl) {
     font,
     bold: !!(obj?.bold || obj?.black) || /bold|black|heavy|semibold|demi/.test(n),
     italic: !!obj?.italic || /italic|oblique/.test(n),
+    pdfName: obj?.name || '', // real font name, e.g. "ABCDEF+Calibri-Bold"
+    obj, // pdf.js font object (keeps the embedded program bytes)
   };
 }
 

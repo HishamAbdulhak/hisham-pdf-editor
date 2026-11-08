@@ -4,6 +4,8 @@ import fontkit from '@cantoo/fontkit';
 import bidiFactory from 'bidi-js';
 import { StandardFonts } from '@cantoo/pdf-lib';
 import { assetBytes } from './assets.js';
+import { stripBitmapTables } from './sfnt.js';
+import { isNamed, familyOf, familyBytes, embeddedFont, cssFamily } from './fontlib.js';
 
 const bidi = bidiFactory();
 
@@ -18,6 +20,10 @@ export const FONTS = {
   Naskh: '"PDFE Naskh", "Times New Roman", serif',
   ArSans: '"PDFE ArSans", Arial, sans-serif',
 };
+
+// CSS font-family for a text object's meta ({ font, generic, embedded }).
+export const fontCss = (meta) => cssFamily(meta || {}, FONTS);
+export const FONT_KEYS = new Set(FAMILIES);
 
 const STD = {
   Helvetica: [StandardFonts.Helvetica, StandardFonts.HelveticaBold, StandardFonts.HelveticaOblique, StandardFonts.HelveticaBoldOblique],
@@ -72,14 +78,57 @@ export class FontSet {
     return this.get(name, () => this.doc.embedFont(name));
   }
 
+  // A named family (installed / downloaded / look-alike) or a font copied from the source PDF.
+  // Resolves to null when nothing is available, so callers fall back to the built-ins.
+  custom(family, bold, italic) {
+    return this.get(`f:${family}|${bold}|${italic}`, async () => {
+      const r = await familyBytes(family, bold, italic);
+      return r ? this.embedBytes(r.bytes, { noSubset: r.noSubset }) : null;
+    });
+  }
+
+  embedded(k) {
+    return this.get(`e:${k}`, async () => {
+      const f = embeddedFont(k);
+      return f ? this.embedBytes(f.bytes) : null;
+    });
+  }
+
+  async embedBytes(bytes, { noSubset = false } = {}) {
+    bytes = stripBitmapTables(bytes);
+    // Subsetting CFF-based (OpenType "OTTO") fonts is unreliable in pdf-lib, so embed those whole,
+    // as well as fonts whose licence forbids subsetting.
+    const cff = bytes[0] === 0x4f && bytes[1] === 0x54 && bytes[2] === 0x54 && bytes[3] === 0x4f;
+    try { return await this.doc.embedFont(bytes, { subset: !cff && !noSubset }); } catch (e) { console.warn('embed font', e); return null; }
+  }
+
   arabic(style, bold) {
     const file = `fonts/${style}-${bold ? 700 : 400}.ttf`;
     return this.get(file, async () => this.doc.embedFont(await assetBytes(file), { subset: true }));
   }
 
   // Splits one line into visually ordered runs, each drawable with a single font.
-  async layout(text, { family = 'Helvetica', bold = false, italic = false, size }) {
+  async layout(text, { family = 'Helvetica', generic, embedded, bold = false, italic = false, size }) {
     const runs = [];
+    // Named fonts: try the PDF's own font, then the family, per character; built-ins catch the rest.
+    const named = isNamed(family);
+    const base = named ? (generic && FONT_KEYS.has(generic) ? generic : 'Helvetica') : family;
+    const customs = [];
+    if (named) {
+      const emb = embedded ? await this.embedded(embedded) : null;
+      if (emb && embeddedFont(embedded).bold === !!bold && embeddedFont(embedded).italic === !!italic) customs.push(emb);
+      const fam = await this.custom(familyOf(family), bold, italic);
+      if (fam) customs.push(fam);
+    }
+    const customFor = (ch) => {
+      const cp = ch.codePointAt(0);
+      for (let n = 0; n < customs.length; n++) {
+        const fk = customs[n].embedder?.font;
+        if (fk?.hasGlyphForCodePoint?.(cp)) return n;
+      }
+      return -1;
+    };
+    family = base;
     if (!text) return { runs, width: 0 };
     const rtlBase = isRtlText(text);
     const embedding = bidi.getEmbeddingLevels(text, rtlBase ? 'rtl' : 'ltr');
@@ -95,7 +144,11 @@ export class FontSet {
     let cur = null;
     for (const i of order) {
       const rtl = !!(levels[i] & 1);
-      const key = useArabic(i) ? `ar:${arabicStyle}` : 'latin';
+      let key = useArabic(i) ? `ar:${arabicStyle}` : 'latin';
+      if (customs.length && !ARABIC_RE.test(text[i])) {
+        const n = customFor(text[i]);
+        if (n >= 0) key = `c${n}`;
+      }
       const contiguous = cur && cur.key === key && cur.rtl === rtl && (rtl ? i === cur.min - 1 : i === cur.max + 1);
       if (contiguous) { cur.min = Math.min(cur.min, i); cur.max = Math.max(cur.max, i); continue; }
       cur = { key, rtl, min: i, max: i };
@@ -104,7 +157,8 @@ export class FontSet {
     let width = 0;
     for (const r of runs) {
       r.text = text.slice(r.min, r.max + 1);
-      r.font = r.key === 'latin' ? await this.latin(family, bold, italic) : await this.arabic(arabicStyle, bold);
+      if (r.key[0] === 'c') r.font = customs[Number(r.key.slice(1))];
+      else r.font = r.key === 'latin' ? await this.latin(family, bold, italic) : await this.arabic(arabicStyle, bold);
       r.font.encodeText(r.text); // throws for characters the font can't show
       r.width = r.font.widthOfTextAtSize(r.text, size);
       width += r.width;

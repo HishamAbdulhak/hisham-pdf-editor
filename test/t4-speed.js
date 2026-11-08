@@ -37,4 +37,11 @@ const t4 = performance.now();
 await app.exportPdf(e);
 out.exportMs = Math.round(performance.now() - t4);
 out.activeCanvases = e.views.filter((v) => v.canvas).length;
-return out;
+// Generous limits (several times a normal PC) so only real slowdowns fail.
+expect(out, out.openMs < 3000, 'open under 3 s');
+expect(out, out.firstPageMs < 5000, 'first page under 5 s');
+expect(out, out.jumpToPage150Ms < 3000, 'jump to page 150 under 3 s');
+expect(out, out.toolSwitchMs < 1000, 'tool switch under 1 s');
+expect(out, out.exportMs < 10000, 'export under 10 s');
+expect(out, out.activeCanvases <= 8, 'only nearby pages keep a canvas');
+return done(out);

@@ -14,7 +14,7 @@ let tb = v.canvas.getActiveObject(); tb.text = 'Prepared by: Hisham'; tb.initDim
 // 2. Fill form fields through pdf.js storage
 const fields = await e.fieldObjects();
 out.fieldKeys = Object.keys(fields || {});
-if (!fields.name) return out;
+if (!fields.name) return done({ ...out, failed: ['form fields missing'] });
 e.pdf.annotationStorage.setValue(fields.name[0].id, { value: 'Hisham Abdulhak' });
 e.pdf.annotationStorage.setValue(fields.agree[0].id, { value: true });
 // 3. Arabic + mixed text box
@@ -46,4 +46,9 @@ out.annotations = annots.map((a) => `${a.subtype}:${a.fieldName || ''}:${a.field
 out.undo = e.undoStack.length;
 await window.pdfeTest.shot('t1-exported');
 await renderPdf(bytes, 't1-render', 1, 2, { x: 50, y: 560, w: 520, h: 160 });
-return out;
+expect(out, out.runs.includes('Quarterly Report') && out.paras === 1, 'text runs and paragraph found');
+expect(out, out.exportedText.includes('Prepared by: Hisham'), 'edited line saved');
+expect(out, out.exportedText.includes('مرحبا بالعالم'), 'Arabic text saved');
+expect(out, out.annotations.includes('Widget:name:Hisham Abdulhak') && out.annotations.includes('Widget:agree:Yes'), 'form values saved');
+expect(out, out.annotations.includes('Text::Please check the name.'), 'comment saved');
+return done(out);

@@ -40,6 +40,12 @@ interview; this file is the reference for the build.
 - Edit existing text: click to retype. **Paragraph editing**: a paragraph is one
   block that rewraps inside its original width; line-by-line editing as a fallback.
   Originals are covered (not removed).
+- **Edited text keeps its original font**, in this order: the same font installed on
+  the PC, the PDF's own (partial) copy, a bundled metric-compatible look-alike
+  (Arimo/Tinos/Cousine/Carlito/Caladea), then a Google Fonts download only if the
+  user agrees. The 14 standard PDF fonts stay built-in. Font licence flags (fsType)
+  are honoured. Needs pdf.js `fontExtraProperties: true` (src/assets.js): without
+  it pdf.js gives no real font names or font bytes. Code: src/fontlib.js.
 - Existing images: click to move, resize or delete.
 - Add text boxes, images, freehand pen, highlighter, box, circle, line, arrow,
   whiteout, eraser. Undo/redo, copy/paste, keyboard shortcuts.

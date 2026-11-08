@@ -45,7 +45,8 @@ export async function assetBytes(name) {
 
 // Options for pdfjsLib.getDocument().
 export function pdfjsOptions() {
-  if (isSingleFile) return { isEvalSupported: false, useSystemFonts: true, useWorkerFetch: false };
+  // fontExtraProperties keeps each font's real name and program bytes (used to keep fonts when editing).
+  if (isSingleFile) return { isEvalSupported: false, useSystemFonts: true, useWorkerFetch: false, fontExtraProperties: true };
   const dir = (d) => new URL(`./assets/pdfjs/${d}/`, document.baseURI).href;
   return {
     cMapUrl: dir('cmaps'),
@@ -54,5 +55,6 @@ export function pdfjsOptions() {
     wasmUrl: dir('wasm'),
     iccUrl: dir('iccs'),
     isEvalSupported: false,
+    fontExtraProperties: true,
   };
 }
