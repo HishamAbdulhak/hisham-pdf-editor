@@ -22,3 +22,15 @@ async function renderPdf(bytes, name, n = 1, scale = 1.5, clip) {
   await window.pdfeTest.write(`${name}-p${n}.png`, new Uint8Array(await blob.arrayBuffer()));
   return tab;
 }
+// True if `needle` (e.g. hex-encoded text) appears in any stream of the PDF, compressed or not.
+async function rawContains(bytes, needle) {
+  const s = new TextDecoder('latin1').decode(bytes);
+  for (const m of s.matchAll(/stream\r?\n/g)) {
+    const start = m.index + m[0].length;
+    const body = bytes.slice(start, s.indexOf('endstream', start));
+    let text = new TextDecoder('latin1').decode(body);
+    try { text = new TextDecoder('latin1').decode(await new Response(new Blob([body]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()); } catch { /* not compressed */ }
+    if (text.toUpperCase().includes(needle.toUpperCase())) return true;
+  }
+  return false;
+}

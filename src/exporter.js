@@ -10,6 +10,7 @@ import {
 import { mul, invert, apply } from './matrix.js';
 import { BASELINE } from './page.js';
 import { FontSet, hasArabic } from './fonts.js';
+import { pruneUnused } from './prune.js';
 
 /** Builds the final PDF bytes for an editor's current state. */
 export async function exportPdf(editor, { encrypt = true } = {}) {
@@ -33,6 +34,7 @@ export async function exportPdf(editor, { encrypt = true } = {}) {
       else await drawObject(ctx, pages[i], o, toPdf);
     }
   }
+  pruneUnused(doc);
   if (encrypt && editor.protect?.userPassword) {
     doc.encrypt({ userPassword: editor.protect.userPassword, ownerPassword: editor.protect.userPassword });
   }

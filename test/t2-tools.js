@@ -60,6 +60,8 @@ await T.applyRedactions(e, { ocr: true });
 const red = await app.exportPdf(e);
 const redText = await textOf(red, 1);
 out.redactedStillHasName = /John Smith/.test(redText);
+out.redactedNameInRawFile = await rawContains(red, '4A6F686E20536D697468'); // "John Smith" as pdf-lib writes it
+if (out.redactedStillHasName || out.redactedNameInRawFile) throw new Error(`redacted text survived: ${JSON.stringify(out)}`);
 out.redactedOcrFoundTitle = /Quarterly/i.test(redText);
 await renderPdf(red, 't2-redacted', 1, 1);
 return out;

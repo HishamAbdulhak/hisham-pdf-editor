@@ -43,7 +43,8 @@ function num(dict, key) { const v = dict.get(PDFName.of(key)); return v instance
 
 async function reencode(ctx, stream, maxDim, quality) {
   const d = stream.dict;
-  if (d.get(PDFName.of('ImageMask'))) return null;
+  // Masked images: a JPEG can't keep the transparency key, so leave them alone.
+  if (d.get(PDFName.of('ImageMask')) || d.get(PDFName.of('Mask'))) return null;
   if (d.get(PDFName.of('Decode'))) return null;
   let filter = d.get(PDFName.of('Filter'));
   if (filter instanceof PDFArray) {

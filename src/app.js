@@ -178,7 +178,8 @@ function setTool(tool) {
   for (const tab of tabs.list) tab.editor.applyTool();
   if (tool === 'edit') toast(t('Click text to change a whole paragraph (Alt+click for one line), or click an image to move or delete it.'), 'info', 4500);
   if (tool === 'redact') toast(t('Draw boxes over what you want removed, then press “Apply redactions”.'), 'info', 4500);
-  refreshAll();
+  renderPropbar();
+  updateChrome();
 }
 
 // ---- Property bar --------------------------------------------------------------------------
@@ -523,6 +524,8 @@ async function openFile(file, opts = {}) {
   const existing = tabs.findByPath(file.path);
   if (existing) { tabs.activate(existing); return existing; }
   const key = opts.key || recoveryKeyFor(file);
+  const sameFile = tabs.list.find((x) => x.recoveryKey === key);
+  if (sameFile) { tabs.activate(sameFile); return sameFile; }
   let restore = null;
   const rec = await platform.recoveryGet(key);
   if (rec?.meta?.dirty) {

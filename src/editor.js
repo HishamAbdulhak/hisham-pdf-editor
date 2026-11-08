@@ -9,6 +9,7 @@ import { toast } from './ui.js';
 import { t } from './i18n.js';
 import { assetUrl, pdfjsOptions } from './assets.js';
 import { applyFormValues } from './exporter.js';
+import { pruneUnused } from './prune.js';
 
 let workerReady = false;
 function ensureWorker() {
@@ -24,6 +25,8 @@ export function loadPdfjs(bytes, password) {
 
 const DRAG_TOOLS = new Set(['rect', 'ellipse', 'line', 'arrow', 'whiteout', 'redact']);
 const HISTORY_LIMIT = 100;
+// Page operations keep a full copy of the PDF for undo; only this many stay undoable.
+const DOC_UNDO_LIMIT = 10;
 let nextId = 1;
 export const newId = (p = 'p') => `${p}${Date.now().toString(36)}${(nextId++).toString(36)}`;
 
@@ -780,11 +783,12 @@ export class Editor {
   }
 
   pushHistory(entry) {
-    this.undoStack.push(entry);
-    if (this.undoStack.length > HISTORY_LIMIT) {
-      const dropped = this.undoStack.shift();
-      if (dropped === this.savedMarker) this.savedMarker = null;
-    }
+    const stack = this.undoStack;
+    stack.push(entry);
+    let drop = Math.max(0, stack.length - HISTORY_LIMIT);
+    const docEntries = stack.filter((x) => x.type === 'doc');
+    if (docEntries.length > DOC_UNDO_LIMIT) drop = Math.max(drop, stack.indexOf(docEntries[docEntries.length - DOC_UNDO_LIMIT - 1]) + 1);
+    for (const dropped of stack.splice(0, drop)) if (dropped === this.savedMarker) this.savedMarker = null;
     this.redoStack = [];
     this.onChange('history');
   }
@@ -841,11 +845,18 @@ export class Editor {
 
   async pageOp(fn) {
     this.finishTextEditing();
-    const before = { bytes: this.bytes, models: this.snapshotModels() };
-    const doc = await this.loadLib();
-    if (this.formDirty) await applyFormValues(doc, this);
+    // Typed form values go into the "before" copy too, so undo doesn't erase them.
+    let base = this.bytes;
+    if (this.formDirty) {
+      const filled = await this.loadLib();
+      await applyFormValues(filled, this);
+      base = await filled.save();
+    }
+    const before = { bytes: base, models: this.snapshotModels() };
+    const doc = await PDFDocument.load(base, { updateMetadata: false });
     const models = await fn(doc, before.models.map((m) => ({ ...m })));
     if (!models) return;
+    pruneUnused(doc);
     const bytes = await doc.save();
     await this.setDocument(bytes, models);
     this.pushHistory({ type: 'doc', before, after: { bytes, models: models.map((m) => ({ ...m })) } });

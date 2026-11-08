@@ -10,6 +10,7 @@ const root = path.join(__dirname, '..');
 const tmp = path.join(os.tmpdir().split(path.sep).slice(0, 6).join(path.sep), 'hpdfe-build');
 const run = (cmd, env = {}) => execSync(cmd, { cwd: root, stdio: 'inherit', env: { ...process.env, ...env } });
 
+run('node test/prune.test.mjs');
 run('node scripts/make-icon.js');
 run('node scripts/build.js');
 run('node scripts/build-html.js');

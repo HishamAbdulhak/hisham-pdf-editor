@@ -12,11 +12,11 @@
     "icon": "node scripts/make-icon.js",
     "dist": "node scripts/make-icon.js && node scripts/build.js && electron-builder --win",
     "html": "node scripts/build.js && node scripts/build-html.js",
-    "dist:temp": "node scripts/release.js"
+    "dist:temp": "node scripts/release.js",
+    "test": "node test/prune.test.mjs && sh test/run.sh test/t1-core.js && sh test/run.sh test/t2-tools.js"
   },
   "author": "Hisham",
   "license": "MIT",
-  "type": "commonjs",
   "devDependencies": {
     "@cantoo/fontkit": "^2.0.12",
     "@cantoo/pdf-lib": "^2.11.1",
