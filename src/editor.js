@@ -4,8 +4,9 @@ import * as pdfjsLib from 'pdfjs-dist';
 import * as fabric from 'fabric';
 import { PDFDocument, degrees } from '@cantoo/pdf-lib';
 import { PageView, BASELINE, prepareObject } from './page.js';
-import { FONTS, isRtlText, hasArabic } from './fonts.js';
-import { toast } from './ui.js';
+import { FONTS, fontCss, isRtlText, hasArabic } from './fonts.js';
+import { isNamed, familyOf, namedId, matchPdfFont, registerEmbedded, embeddedCovers, embeddedReady, embeddedFont, prepareDisplay, familyAvailable, offerDownload, genericFor } from './fontlib.js';
+import { toast, askToast } from './ui.js';
 import { t } from './i18n.js';
 import { assetUrl, pdfjsOptions } from './assets.js';
 import { applyFormValues } from './exporter.js';
@@ -440,7 +441,7 @@ export class Editor {
       originY: 'top',
       width: 220,
       fontSize: p.size,
-      fontFamily: FONTS[p.font],
+      fontFamily: fontCss({ font: p.font, generic: p.generic }),
       fontWeight: p.bold ? 'bold' : 'normal',
       fontStyle: p.italic ? 'italic' : 'normal',
       textAlign: p.align,
@@ -450,7 +451,7 @@ export class Editor {
       lineHeight: 1.16,
       editingBorderColor: '#2f6fed',
       cursorColor: '#2f6fed',
-      meta: { kind: 'text', font: p.font },
+      meta: isNamed(p.font) ? { kind: 'text', font: p.font, generic: p.generic || genericFor(familyOf(p.font)) } : { kind: 'text', font: p.font },
       ...opts,
     });
   }
@@ -616,7 +617,7 @@ export class Editor {
       width,
       fontSize,
       lineHeight,
-      fontFamily: FONTS[run.font.font],
+      fontFamily: fontCss({ font: run.font.font }),
       fontWeight: run.font.bold ? 'bold' : 'normal',
       fontStyle: run.font.italic ? 'italic' : 'normal',
       textAlign: rtl ? 'right' : 'left',
@@ -634,6 +635,66 @@ export class Editor {
     c.requestRenderAll();
     this.syncPropsFrom(tb);
     if (hasArabic(run.str)) toast(t('Arabic text from the PDF may come out jumbled — retype it if needed.'), 'info', 5000);
+    // Switch to the PDF's own font once it is found (the built-in font shows meanwhile).
+    return this.useOriginalFont(view, tb, run).catch((err) => console.warn('original font', err));
+  }
+
+  // Keeps the original font: the copy embedded in the PDF, the installed font of that name,
+  // a bundled look-alike, or (if the user agrees) a downloaded one.
+  async useOriginalFont(view, tb, run) {
+    const f = run.font;
+    if (!f?.pdfName || run.rtl) return null; // Arabic keeps the shaping-aware Arabic fonts
+    const m = await matchPdfFont(f.pdfName);
+    if (!m) return null;
+    // The PDF's copy is usually a partial subset: only worth it when the full font isn't installed.
+    let embedded = null;
+    const k = !m.installed && f.obj ? registerEmbedded(f.obj) : null;
+    if (k && embeddedCovers(k, run.str)) { embedded = k; await embeddedReady(k); }
+    const available = await familyAvailable(m.family);
+    if (!available && !embedded) return null; // nothing better than the built-in font
+    const apply = async () => {
+      await prepareDisplay(m.family);
+      const meta = { ...tb.meta, font: namedId(m.family), generic: f.font };
+      if (embedded) meta.embedded = embedded; else delete meta.embedded;
+      tb.meta = meta;
+      tb.set('fontFamily', fontCss(meta));
+      tb.initDimensions();
+      tb.setCoords();
+      tb.dirty = true;
+      view.canvas?.requestRenderAll();
+      if (view.canvas?.getActiveObject() === tb) this.syncPropsFrom(tb);
+      if (!tb.isEditing && view.canvas?.getObjects().includes(tb)) this.commit(view);
+    };
+    await apply();
+    if (!available) {
+      // Only the PDF's partial copy exists: offer to fetch the full font for new letters.
+      offerDownload(m.family, (family) => askToast(
+        t('“{f}” isn’t installed. Download it from Google Fonts so new letters match?', { f: family }),
+        [{ label: t('Download'), value: 'yes', primary: true }, { label: t('Always'), value: 'always' }, { label: t('Not now'), value: 'no' }, { label: t('Never ask'), value: 'never' }],
+      )).then(async (r) => {
+        if (!r) return;
+        if (r.ok) {
+          toast(t('Font “{f}” downloaded.', { f: m.family }), 'success');
+          if (tb.meta?.font === namedId(m.family)) await apply(); // unless a different font was picked meanwhile
+        }
+        else toast(t('Couldn’t get “{f}” — keeping the closest match.', { f: m.family }), 'warn', 4500);
+      });
+    }
+    return { family: m.family, embedded, installed: m.installed, lookalike: m.lookalike };
+  }
+
+  // Makes sure named fonts used by loaded objects are drawable (after undo, reload or recovery).
+  async prepareFonts(objects) {
+    const fams = new Set(objects.filter((o) => o.meta?.kind === 'text' && isNamed(o.meta.font)).map((o) => familyOf(o.meta.font)));
+    if (!fams.size) return false;
+    await Promise.all([...fams].map((fam) => prepareDisplay(fam).catch(() => {})));
+    for (const o of objects) {
+      if (o.meta?.kind !== 'text' || !isNamed(o.meta.font)) continue;
+      o.set('fontFamily', fontCss(o.meta));
+      o.initDimensions?.();
+      o.dirty = true;
+    }
+    return true;
   }
 
   async extractImage(view, im) {
@@ -698,6 +759,7 @@ export class Editor {
       p.color = o.fill;
       p.size = Math.round(o.fontSize * (o.scaleY || 1) * 10) / 10;
       p.font = o.meta.font || 'Helvetica';
+      p.generic = o.meta.generic;
       p.bold = o.fontWeight === 'bold';
       p.italic = o.fontStyle === 'italic';
       p.align = o.textAlign;
@@ -985,16 +1047,21 @@ export function applyProp(o, name, value) {
       if (!['highlight', 'cover', 'redact', 'markup', 'note'].includes(k)) o.set('opacity', value);
       break;
     case 'font':
-      if (k === 'text') { o.set('fontFamily', FONTS[value]); o.meta = { ...o.meta, font: value }; }
+      if (k === 'text') {
+        const same = value === o.meta?.font;
+        const meta = { ...o.meta, font: value, generic: isNamed(value) ? (same ? o.meta.generic : genericFor(familyOf(value))) : undefined, embedded: same ? o.meta.embedded : undefined };
+        o.meta = meta;
+        o.set('fontFamily', fontCss(meta));
+      }
       break;
     case 'size':
       if (k === 'text') o.set({ fontSize: value / (o.scaleY || 1) });
       break;
     case 'bold':
-      if (k === 'text') o.set('fontWeight', value ? 'bold' : 'normal');
+      if (k === 'text') { o.set('fontWeight', value ? 'bold' : 'normal'); dropEmbedded(o); }
       break;
     case 'italic':
-      if (k === 'text') o.set('fontStyle', value ? 'italic' : 'normal');
+      if (k === 'text') { o.set('fontStyle', value ? 'italic' : 'normal'); dropEmbedded(o); }
       break;
     case 'align':
       if (k === 'text') o.set('textAlign', value);
@@ -1004,6 +1071,15 @@ export function applyProp(o, name, value) {
   if (o.initDimensions && k === 'text') o.initDimensions();
   o.setCoords();
   o.dirty = true;
+}
+
+// The PDF's embedded copy is a single style; after bold/italic changes use the full family.
+function dropEmbedded(o) {
+  const emb = o.meta?.embedded && embeddedFont(o.meta.embedded);
+  if (!emb) return;
+  if (emb.bold === (o.fontWeight === 'bold') && emb.italic === (o.fontStyle === 'italic')) return;
+  o.meta = { ...o.meta, embedded: undefined };
+  o.set('fontFamily', fontCss(o.meta));
 }
 
 // Rotates overlay objects along with their page (delta = ±90).

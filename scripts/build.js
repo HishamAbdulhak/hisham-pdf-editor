@@ -26,7 +26,7 @@ const ASSETS = {
   'ocr/ara.traineddata.gz': nm('@tesseract.js-data/ara/4.0.0_best_int/ara.traineddata.gz'),
 };
 // Folders only shipped in the desktop app (the single HTML file falls back to system fonts).
-const ASSET_DIRS = { 'pdfjs/cmaps': nm('pdfjs-dist/cmaps'), 'pdfjs/standard_fonts': nm('pdfjs-dist/standard_fonts'), 'pdfjs/wasm': nm('pdfjs-dist/wasm'), 'pdfjs/iccs': nm('pdfjs-dist/iccs') };
+const ASSET_DIRS = { 'fonts/lookalike': path.join(root, 'vendor', 'fonts'), 'pdfjs/cmaps': nm('pdfjs-dist/cmaps'), 'pdfjs/standard_fonts': nm('pdfjs-dist/standard_fonts'), 'pdfjs/wasm': nm('pdfjs-dist/wasm'), 'pdfjs/iccs': nm('pdfjs-dist/iccs') };
 
 // Text-selection and form-field styles from pdf.js's viewer stylesheet.
 function pdfjsLayerCss() {
@@ -50,6 +50,7 @@ function copyStatic() {
 }
 
 async function build() {
+  if (!fs.existsSync(ASSETS['icon.png'])) require('./make-icon.js'); // build/ is git-ignored
   fs.rmSync(out, { recursive: true, force: true });
   copyStatic();
   for (const [name, from] of Object.entries(ASSETS)) {

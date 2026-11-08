@@ -206,7 +206,8 @@ async function drawText(ctx, page, o, opacity) {
   let layouts;
   try {
     layouts = [];
-    for (const line of lines) layouts.push(await ctx.fonts.layout(line, { family, bold, italic, size: o.fontSize }));
+    const { generic, embedded } = o.meta || {};
+    for (const line of lines) layouts.push(await ctx.fonts.layout(line, { family, generic, embedded, bold, italic, size: o.fontSize }));
   } catch {
     return drawRaster(ctx, page, o); // characters no embedded font can show (e.g. emoji)
   }

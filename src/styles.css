@@ -242,6 +242,14 @@ body.dragging-file .drop-hint { display: grid; }
 .dropdown button:disabled { opacity: .4; cursor: default; }
 .dropdown button svg { width: 16px; height: 16px; color: var(--muted); }
 .dropdown .sep { height: 1px; background: var(--line); margin: 5px 4px; }
+.search-list { width: 280px; display: flex; flex-direction: column; gap: 6px; }
+.search-list-input { height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); color: var(--text); outline: none; }
+.search-list-input:focus { border-color: var(--accent); }
+.search-list-items { max-height: min(420px, 60vh); overflow-y: auto; }
+.search-list-items button { font-size: 15px; }
+.search-list-items button.on { background: var(--accent-soft); }
+.search-list-group { padding: 8px 10px 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.font-btn { min-width: 150px; max-width: 200px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); cursor: pointer; text-align: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- Modals & forms ---- */
 .modal-back { position: fixed; inset: 0; background: rgba(10,15,25,.45); display: grid; place-items: center; z-index: 50; padding: 16px; }
@@ -321,6 +329,10 @@ kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--panel-2); 
 .toast.error { background: #b42318; }
 .toast.warn { background: #b54708; }
 .toast.out { opacity: 0; }
+.toast.ask { pointer-events: auto; text-align: start; }
+.toast-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.toast-actions button { border: 0; border-radius: 6px; padding: 6px 12px; background: rgba(255,255,255,.14); color: #fff; cursor: pointer; }
+.toast-actions button.primary { background: var(--accent); }
 @keyframes pop { from { transform: translateY(8px); opacity: 0; } }
 #busy { position: fixed; top: 112px; left: 50%; transform: translateX(-50%); z-index: 55; display: flex; align-items: center; gap: 10px; background: var(--panel); padding: 10px 18px; border-radius: 999px; box-shadow: var(--shadow); flex-wrap: wrap; justify-content: center; }
 #busy .bar { display: none; width: 100%; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }

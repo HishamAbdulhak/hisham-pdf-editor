@@ -133,6 +133,24 @@ export const platform = {
 
   async initialFiles() { return desktop ? desktop.initialFiles() : []; },
   async openDefaultApps() { if (desktop) await desktop.openDefaultApps(); },
+  // Installed fonts: [{ file, index, family, style, full, ps, weight, italic, restricted }].
+  async listSystemFonts() {
+    if (desktop) return desktop.fontsList();
+    if (!window.queryLocalFonts) return [];
+    try {
+      const list = await window.queryLocalFonts();
+      return list.map((f) => ({
+        file: f.postscriptName, index: 0, family: f.family, style: f.style, full: f.fullName, ps: f.postscriptName,
+        weight: /black|heavy/i.test(f.style) ? 900 : /bold/i.test(f.style) ? 700 : /light/i.test(f.style) ? 300 : 400,
+        italic: /italic|oblique/i.test(f.style), restricted: false, local: f,
+      }));
+    } catch { return []; }
+  },
+  async systemFontBytes(face) {
+    if (desktop) return desktop.fontBytes(face.file, face.index);
+    return face.local ? new Uint8Array(await (await face.local.blob()).arrayBuffer()) : null;
+  },
+  async downloadFont(family) { return desktop ? desktop.fontDownload(family) : { ok: false, reason: 'unsupported' }; },
   async appVersion() { return desktop ? desktop.appVersion() : '1.0.0'; },
   setDirty(n) { if (desktop) desktop.setDirty(n); },
   setTitle(title) { if (desktop) desktop.setTitle(title); else document.title = title; },

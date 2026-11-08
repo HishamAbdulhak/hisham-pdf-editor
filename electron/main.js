@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, protocol, shell, screen } = r
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const fontscan = require('./fontscan.js');
 
 const APP_NAME = "Hisham's PDF Editor";
 const OUT_DIR = path.join(__dirname, '..', 'out');
@@ -86,6 +87,7 @@ function createWindow() {
   if (state.maximized) win.maximize();
   win.once('ready-to-show', () => {
     win.show();
+    setTimeout(() => getFontIndex(), 2500); // warm up so the first text edit is instant
     if (TEST) console.log('STARTUP ready-to-show', Math.round(performance.now()), 'ms after launch');
   });
   win.loadURL('app://local/index.html');
@@ -302,6 +304,52 @@ ipcMain.handle('recovery-remove', (_e, key) => {
   fs.rmSync(`${base}.json`, { force: true });
   fs.rmSync(`${base}.pdf`, { force: true });
   return true;
+});
+
+// ---- Fonts: installed system fonts + fonts downloaded (with the user's consent) -----------
+const webFontDir = () => path.join(dataDir(), 'fonts');
+let fontIndex = null;
+function getFontIndex() {
+  if (!fontIndex) {
+    const web = webFontDir();
+    fontIndex = fontscan.buildIndex(dataFile('font-index.json'), [web])
+      .then((list) => list.map((f) => ({ ...f, web: f.file.startsWith(web) })))
+      .catch(() => []);
+  }
+  return fontIndex;
+}
+ipcMain.handle('fonts-list', () => getFontIndex());
+ipcMain.handle('fonts-bytes', async (_e, file, index) => {
+  if (!(await getFontIndex()).some((f) => f.file === file)) return null; // only files we found ourselves
+  return new Uint8Array(fontscan.faceBytes(file, index));
+});
+// Fetches a family from Google Fonts (regular/bold/italic/bold italic when available).
+ipcMain.handle('fonts-download', async (_e, family) => {
+  const { net } = require('electron');
+  if (typeof family !== 'string' || !/^[A-Za-z0-9 ]{1,60}$/.test(family)) return { ok: false, reason: 'name' };
+  const q = encodeURIComponent(family).replace(/%20/g, '+');
+  const css = async (spec) => {
+    const r = await net.fetch(`https://fonts.googleapis.com/css2?family=${q}${spec}`, { headers: { 'user-agent': 'HishamsPDFEditor' } });
+    return r.ok ? r.text() : null;
+  };
+  try {
+    const text = (await css(':ital,wght@0,400;0,700;1,400;1,700')) || (await css(''));
+    if (!text) return { ok: false, reason: 'notfound' };
+    const faces = [...text.matchAll(/font-style:\s*(\w+);\s*font-weight:\s*(\d+);[^}]*?src:\s*url\(([^)]+)\)/g)];
+    if (!faces.length) return { ok: false, reason: 'notfound' };
+    fs.mkdirSync(webFontDir(), { recursive: true });
+    for (const [, style, weight, url] of faces) {
+      if (!/^https:\/\/fonts\.gstatic\.com\//.test(url)) continue;
+      const r = await net.fetch(url);
+      if (!r.ok) continue;
+      const name = `${family.replace(/ /g, '')}-${weight}${style === 'italic' ? 'i' : 'n'}.ttf`;
+      fs.writeFileSync(path.join(webFontDir(), name), Buffer.from(await r.arrayBuffer()));
+    }
+    fontIndex = null; // rescan (cached, so only the new files are read)
+    return { ok: true, faces: (await getFontIndex()).filter((f) => f.file.startsWith(webFontDir()) && f.family.toLowerCase() === family.toLowerCase()) };
+  } catch (err) {
+    return { ok: false, reason: 'network', message: String(err?.message || err) };
+  }
 });
 
 ipcMain.handle('initial-files', () => pendingPaths.splice(0).map(loadPdf));
