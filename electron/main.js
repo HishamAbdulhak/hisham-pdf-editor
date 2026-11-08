@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, protocol, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, protocol, shell, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -47,15 +47,26 @@ function addRecent(filePath) {
   writeJson('recent.json', list.slice(0, 10));
 }
 
+// Files the user picked or opened. Quiet saves may only go to these; anything else gets a dialog.
+const granted = new Set();
+const grant = (p) => granted.add(path.resolve(p).toLowerCase());
+const isGranted = (p) => granted.has(path.resolve(p).toLowerCase());
+const STORES = new Set(['settings', 'session', 'signatures']);
+
 function loadPdf(filePath) {
   filePath = path.resolve(filePath);
+  if (!/.pdf$/i.test(filePath)) throw new Error('Not a PDF file');
   const data = fs.readFileSync(filePath);
+  if (!data.subarray(0, 1024).toString('latin1').includes('%PDF')) throw new Error('Not a PDF file');
+  grant(filePath);
   addRecent(filePath);
   return { path: filePath, name: path.basename(filePath), data: new Uint8Array(data) };
 }
 
 function createWindow() {
   const state = readJson('window.json', { width: 1400, height: 900 });
+  const onScreen = screen.getAllDisplays().some(({ workArea: a }) => state.x >= a.x - 50 && state.y >= a.y - 50 && state.x < a.x + a.width - 100 && state.y < a.y + a.height - 100);
+  if (!onScreen) { delete state.x; delete state.y; }
   win = new BrowserWindow({
     ...state,
     minWidth: 900,
@@ -231,7 +242,7 @@ ipcMain.handle('pick-images', async (_e, multi) => {
 
 // Writes straight to filePath when given (quiet save), otherwise asks with a dialog.
 ipcMain.handle('save-pdf', async (_e, { data, filePath, defaultPath }) => {
-  let target = filePath;
+  let target = filePath && isGranted(filePath) ? filePath : null;
   if (!target) {
     const r = await dialog.showSaveDialog(win, {
       defaultPath: defaultPath || 'document.pdf',
@@ -240,7 +251,16 @@ ipcMain.handle('save-pdf', async (_e, { data, filePath, defaultPath }) => {
     if (r.canceled || !r.filePath) return null;
     target = r.filePath;
   }
-  fs.writeFileSync(target, Buffer.from(data));
+  // Write a temporary file first so a crash or full disk never destroys the original.
+  const tmp = `${target}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, Buffer.from(data));
+    fs.renameSync(tmp, target);
+  } catch (err) {
+    fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+  grant(target);
   addRecent(target);
   return { path: target, name: path.basename(target) };
 });
@@ -253,13 +273,13 @@ ipcMain.handle('save-files', async (_e, { files, defaultFolder }) => {
   });
   if (r.canceled || !r.filePaths[0]) return null;
   const dir = r.filePaths[0];
-  for (const f of files) fs.writeFileSync(path.join(dir, f.name), Buffer.from(f.data));
+  for (const f of files) fs.writeFileSync(path.join(dir, path.basename(f.name)), Buffer.from(f.data));
   shell.openPath(dir);
   return { folder: dir, count: files.length };
 });
 
-ipcMain.handle('store-get', (_e, name, fallback) => readJson(`${name}.json`, fallback));
-ipcMain.handle('store-set', (_e, name, value) => { writeJson(`${name}.json`, value); return true; });
+ipcMain.handle('store-get', (_e, name, fallback) => (STORES.has(name) ? readJson(`${name}.json`, fallback) : fallback));
+ipcMain.handle('store-set', (_e, name, value) => { if (STORES.has(name)) writeJson(`${name}.json`, value); return true; });
 ipcMain.handle('recent-load', () => readJson('recent.json', []).filter((p) => fs.existsSync(p)));
 
 ipcMain.handle('recovery-put', (_e, key, meta, bytes) => {
@@ -307,7 +327,7 @@ if (!app.requestSingleInstanceLock()) {
       const url = new URL(request.url);
       const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '');
       const filePath = path.normalize(path.join(OUT_DIR, rel));
-      if (!filePath.startsWith(OUT_DIR)) return new Response('Forbidden', { status: 403 });
+      if (!filePath.startsWith(OUT_DIR + path.sep)) return new Response('Forbidden', { status: 403 });
       try {
         const body = await fs.promises.readFile(filePath);
         const type = MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
